@@ -15,17 +15,18 @@ set <- function(data){
   
   for (col in cols){
     data[,col] <- as.numeric(as.character(data[,col]))
-    data[,col] <- (10^15 * data[,col])
+    data[,col] <- (10^7 * data[,col])
+    options(scipen = 999)
   }
   data
 }
 
-# Dataframe for production of primary energy by country from 1980 to 2016 (unit: btu)
+# Dataframe for production of primary energy by country from 1980 to 2016 (unit: quad btu -> giga btu)
 production <- read.csv("https://raw.githubusercontent.com/stellasylee/Energy/master/International_data_energy.csv", 
                        skip = 8, nrows = 228, head = FALSE) %>%
   set(.)
 
-# Dataframe for consumption of primary energy by country from 1980 to 2016 (unit: btu)
+# Dataframe for consumption of primary energy by country from 1980 to 2016 (unit: quad btu -> giga btu)
 consumption <- read.csv("https://raw.githubusercontent.com/stellasylee/Energy/master/International_data_energy.csv",
                         skip = 238, head = FALSE) %>%
   set(.)
