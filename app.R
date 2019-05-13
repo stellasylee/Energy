@@ -1,17 +1,3 @@
-#We referred to the following webpages while working on this project:
-#https://medium.com/@joyplumeri/how-to-make-interactive-maps-in-r-shiny-brief-tutorial-c2e1ef0447da
-#https://rstudio.github.io/leaflet/popups.html
-#https://appsilon.com/how-to-use-viridis-colors-with-plotly-and-leaflet/
-#https://stackoverflow.com/questions/47824893/coloring-continuous-data-in-leaflet-r-does-not-work
-#https://stackoverflow.com/questions/45776232/define-palette-breaks-for-leaflet
-#http://www.r-tutor.com/elementary-statistics/numerical-measures/quartile
-#http://www.r-tutor.com/elementary-statistics/numerical-measures/percentile
-#http://rprogramming.net/recode-data-in-r/
-#https://stackoverflow.com/questions/54283852/leaflet-colorquantile-breaks-are-not-unique
-#https://stackoverflow.com/questions/54913505/invalid-type-list-of-argument-in-r
-#https://stackoverflow.com/questions/34134310/sum-of-returned-list-error-invalid-type-list-of-argument
-#Some of the map code is copied pretty closely from these sites.
-
 library(shiny)
 library(plotly)
 library(dplyr)
@@ -25,7 +11,6 @@ library(timeSeries)
 library(ggfortify)
 library(reshape2)
 library(forecast)
-#install.packages("viridis")
 library(viridis)
 
 # Source helper functions -----
@@ -76,6 +61,9 @@ ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and 
                                          selectInput(inputId = "country", label = strong("Country:"),
                                                      choices = unique(cleanedPro$country),
                                                      selected = "Afghanistan"),
+                                         checkboxInput(inputId = "ppp", # per capita scale
+                                                       label = "Show PPP (Purchasing Power Parity)",
+                                                       value = FALSE),
                                          checkboxInput(inputId = "perCapita", # per capita scale
                                                        label = "Show per capita scale",
                                                        value = FALSE),
@@ -103,7 +91,7 @@ ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and 
                                                      selected = "Afghanistan")
                                        ),
                                        mainPanel(
-                                         plotlyOutput(outputId = "prediction", height = "600px")
+                                         plotOutput(outputId = "prediction", height = "600px")
                                        )
                                      )))
 )
@@ -221,11 +209,16 @@ server <- function(input, output) {
   })
   
   # Page 4 ----
-  output$prediction <- renderPlotly({
-    data <- prod1.5[prod1.5$country == paste(input$predCountry),]$value
-    M2 = auto.arima(data)
-    M2F = forecast(M2)
-    ggplot2::plot(M2F,main="ARIMA Forecast")
+  output$prediction <- renderPlot({
+    if (input$predProCons == "Production"){
+      data <- prod1.5[prod1.5$country == paste(input$predCountry), ]$value
+      M2 = auto.arima(ts(data, frequency = 10), D=1)
+      M2F = forecast(M2)
+      plot(M2F,main="ARIMA Forecast")
+    }else {
+      
+    }
+    
    
   })
   
