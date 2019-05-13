@@ -108,16 +108,6 @@ mx = -1
 mx <- max(production[,-1],na.rm=T) 
 cat("The maximum is", mx, "\n")
 
-#Check what the maximum value is for consumption so we can set the range for the color scale for circles on the map
-#mx = -1
-#for(i in 2:ncol(consumption)) {
-#  for(k in 1:228) {
-#    if(as.numeric(consumption[i,k]) > mx) {
-#      mx = as.numeric(consumption[i,k])
-#    }
-#  }
-#}
-
 mx <- max(consumption[,-1],na.rm=T) 
 cat("The maximum is", mx, "\n")
 
@@ -189,29 +179,37 @@ for(i in 1:length(tidy_combined_consumption_table$circle_color)) {
 
 # Page 3 ----
 # Population data from 1980 to 2016
-population <- read.csv("https://raw.githubusercontent.com/stellasylee/Energy/master/worldPopulation.csv")
-population <- population [,-(1:2)] %>% .[,-2]
-names (population) <- c("country", cols)
-# Modify country names to match with production and consumption data
-population$country <- as.character(population$country)
-population$country[33] <- "Cape Verde"
-population$country[136] <- "Burma (Myanmar)"
-population$country[45] <- "Congo (Kinshasa)"
-population$country[46] <- "Congo (Brazzaville)"
-population$country[59] <- "Egypt"
-population$country[87] <- "Hong Kong"
-population$country[104] <- "Korea, North"
-population$country[105] <- "Korea, South"
-population$country[109] <- "Laos"
-population$country[118] <- "Macau"
-population$country[146] <- "Macedonia"
-population$country[140] <- "Netherlands"
-population$country[162] <- "Russia"
-population$country[64] <- "Swaziland"
-population$country[213] <- "Virgin Islands, U.S."
-population$country[28] <- "Virgin Islands, British"
-population$country[215] <- "Yemen"
+worldBank <- function (data){
+  data <- data [,-(1:2)] %>% .[,-2]
+  names (data) <- c("country", cols)
+  # Modify country names to match with production and consumption data
+  data$country <- as.character(data$country)
+  data$country[33] <- "Cape Verde"
+  data$country[136] <- "Burma (Myanmar)"
+  data$country[45] <- "Congo (Kinshasa)"
+  data$country[46] <- "Congo (Brazzaville)"
+  data$country[59] <- "Egypt"
+  data$country[87] <- "Hong Kong"
+  data$country[104] <- "Korea, North"
+  data$country[105] <- "Korea, South"
+  data$country[109] <- "Laos"
+  data$country[118] <- "Macau"
+  data$country[146] <- "Macedonia"
+  data$country[140] <- "Netherlands"
+  data$country[162] <- "Russia"
+  data$country[64] <- "Swaziland"
+  data$country[213] <- "Virgin Islands, U.S."
+  data$country[28] <- "Virgin Islands, British"
+  data$country[215] <- "Yemen"
+  
+  data
+}
+population <- read.csv("https://raw.githubusercontent.com/stellasylee/Energy/master/worldPopulation.csv") %>%
+  worldBank(.)
 
+ppp <- read.csv("https://raw.githubusercontent.com/stellasylee/Energy/master/worldPPP.csv") %>%
+  worldBank(.)
+ppp[ppp == "" | ppp == ".."] <- NA
 # Join the data (intersection)
 # Combine Germany East, West to Germany
 for (i in (1980:1990)){
@@ -223,8 +221,10 @@ consumption$country <- as.character(consumption$country)
 cleanedPro <- dplyr::filter(production, !(production$country %in% anti_join(x = production, y = population, by = "country")$country))
 cleanedCon <- dplyr::filter(consumption, !(consumption$country %in% anti_join(x = consumption, y = population, by = "country")$country))
 cleanedPop <- dplyr::filter(population, !(population$country %in% anti_join(x = population, y = production, by = "country")$country))
+cleanedPPP <- dplyr::filter(ppp, !(ppp$country %in% anti_join(x = ppp, y = production, by = "country")$country))
 for (i in 2:38){
   cleanedPop[,i] <- parse_number(as.character(cleanedPop[,i]))
+  cleanedPPP[,i] <- parse_number(as.character(cleanedPPP[,i]))
 }
 
 # World Average
@@ -238,11 +238,6 @@ for (i in (1:37)){
 names(world)<- c("world pro", "world con")
 
 # Page 4 ----
-prod1.5 <- melt(production, id="country")
+prod1.5 <- melt(production, id = "country")
 names(prod1.5)[names(prod1.5) == "variable"] <- "year"
-#prod1.5 <- prod1.5[order(prod1.5$country),]
-
-data <- prod1.5[prod1.5$country == "United States",]$value
-M2 = auto.arima(data)
-M2F = forecast(M2)
-plot(M2F, main="ARIMA Forecast")
+cons
