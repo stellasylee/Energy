@@ -2,8 +2,15 @@
 #https://medium.com/@joyplumeri/how-to-make-interactive-maps-in-r-shiny-brief-tutorial-c2e1ef0447da
 #https://rstudio.github.io/leaflet/popups.html
 #https://appsilon.com/how-to-use-viridis-colors-with-plotly-and-leaflet/
+#https://stackoverflow.com/questions/47824893/coloring-continuous-data-in-leaflet-r-does-not-work
+#https://stackoverflow.com/questions/45776232/define-palette-breaks-for-leaflet
+#http://www.r-tutor.com/elementary-statistics/numerical-measures/quartile
+#http://www.r-tutor.com/elementary-statistics/numerical-measures/percentile
+#http://rprogramming.net/recode-data-in-r/
+#https://stackoverflow.com/questions/54283852/leaflet-colorquantile-breaks-are-not-unique
+#https://stackoverflow.com/questions/54913505/invalid-type-list-of-argument-in-r
+#https://stackoverflow.com/questions/34134310/sum-of-returned-list-error-invalid-type-list-of-argument
 #Some of the map code is copied pretty closely from these sites.
-#https://plot.ly/r/shiny-coupled-hover-events/
 
 library(shiny)
 library(plotly)
@@ -56,7 +63,6 @@ ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and 
                                                          "2010","2011","2012","2013","2014","2015","2016"))
                                ),
                                mainPanel({
-                                 #Map would go here
                                  leafletOutput(outputId = "map")
                                })
                              ))),
@@ -94,7 +100,7 @@ ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and 
                                                      label = "Please choose an option:",
                                                      choices = c("Production", "Consumption")),
                                          selectInput(inputId = "predCountry", label = strong("Country:"),
-                                                     choices = unique(production$country),
+                                                     choices = c(unique(production$country), "World"),
                                                      selected = "Afghanistan")
                                        ),
                                        mainPanel(
@@ -157,7 +163,8 @@ server <- function(input, output) {
   output$timeseries <- renderPlotly({
     # Special Case: Germany reunification at 1990
     if (paste(input$country) == "Germany"){
-      temp <- cbind (as.data.frame(t(cleanedPop [which(cleanedCon$country == "Germany"),-1])),
+      temp <- cbind (as.data.frame(t(cleanedPop [which(cleanedPop$country == "Germany"),-1])),
+                     as.data.frame(t(cleanedPPP [which(cleanedPPP$country == "Germany"),-1])),
                      as.data.frame(t(production [which(production$country == "Germany, East"), -1])),
                      as.data.frame(t(production [which(production$country == "Germany, West"), -1])),
                      as.data.frame(t(cleanedPro [which(cleanedPro$country == "Germany"),-1])), 
@@ -165,20 +172,22 @@ server <- function(input, output) {
                      as.data.frame(t(consumption [which(consumption$country == "Germany, West"), -1])),
                      as.data.frame(t(cleanedCon [which(cleanedCon$country == "Germany"),-1])),
                      world)
-      names(temp) <- c("population", "proEast", "proWest", "production",
-                       "conEast", "conWest", "consumption",  "worldPro", "worldCon")
+      names(temp) <- c("population", "ppp", "proEast", "proWest", "production",
+                       "conEast", "conWest", "consumption",  "worldPro", "worldCon", "worldPPP")
     } else {
       # Create data frame for plot
       temp <- cbind(as.data.frame(t(cleanedPop [which(cleanedPop$country == paste(input$country)),-1])),
+                    as.data.frame(t(cleanedPPP [which(cleanedPPP$country == paste(input$country)),-1])),
                     as.data.frame(t(cleanedPro [which(cleanedPro$country == paste(input$country)),-1])),
                     as.data.frame(t(cleanedCon [which(cleanedCon$country == paste(input$country)),-1])),
                     world)
-      names(temp) <- c("population", "production", "consumption", "worldPro", "worldCon")
+      names(temp) <- c("population", "ppp", "production", "consumption", "worldPro", "worldCon", "worldPPP")
     }
     
     # per capita data
     temp <- mutate(temp, proPerCapita = production / population) %>%
-      mutate(., conPerCapita = consumption / population)
+      mutate(., conPerCapita = consumption / population) %>%
+      mutate(., pppPerCapita = ppp / population)
     
     if (input$log){
       temp <- log (temp[,-1])
@@ -189,28 +198,42 @@ server <- function(input, output) {
              xaxis = list(title = "Year"),
              yaxis = list (title = "Primary Energy (Giga BTU)"))
     
+    
+    if ((input$ppp) && (input$perCapita)){
+      p <- p %>%
+        add_trace(y = ~pppPerCapita, name = 'purchasing power', mode = 'lines+markers', color = '#0000ff', type = 'scatter')
+      if (input$worldAvg){
+        p <- p %>%
+          add_trace(y = ~worldPPP, name = 'world avg purchasing power', mode = 'lines+markers', color = '#000080', type = 'scatter') 
+      }
+    } else if (input$ppp){
+      p <- p %>%
+        add_trace(y = ~ppp, name = 'purchasing power', mode = 'lines+markers', color = 'blue', type = 'scatter')
+    }
+    
+    
     if (input$perCapita){
       p <- p %>%
-        add_trace(y = ~proPerCapita, name = 'production', mode = 'lines+markers', type = 'scatter') %>%
-        add_trace(y = ~conPerCapita, name = 'consumption', mode = 'lines+markers', type = 'scatter')
+        add_trace(y = ~proPerCapita, name = 'production', mode = 'lines+markers', color = 'green', type = 'scatter') %>%
+        add_trace(y = ~conPerCapita, name = 'consumption', mode = 'lines+markers', color = 'darkorchid', type = 'scatter')
     } else{
       p <- p %>%
-        add_trace(y = ~production, name = 'production', mode = 'lines+markers', type = 'scatter') %>%
-        add_trace(y = ~consumption, name = 'consumption', mode = 'lines+markers', type = 'scatter')
+        add_trace(y = ~production, name = 'production', mode = 'lines+markers', color = 'green', type = 'scatter') %>%
+        add_trace(y = ~consumption, name = 'consumption', mode = 'lines+markers', color = 'darkorchid', type = 'scatter')
     }
     
     if ((paste(input$country) == "Germany") && (!input$perCapita)){
       p <- p %>%
-        add_trace(y = ~proEast, name = 'production (East)', mode = 'lines+markers', type = 'scatter') %>%
-        add_trace(y = ~proWest, name = 'production (West)', mode = 'lines+markers', type = 'scatter') %>%
-        add_trace(y = ~conEast, name = 'consumption (East)', mode = 'lines+markers', type = 'scatter') %>%
-        add_trace(y = ~conWest, name = 'consumption (West)', mode = 'lines+markers', type = 'scatter')
+        add_trace(y = ~proEast, name = 'production (East)', mode = 'lines+markers', color = 'yellowgreen', type = 'scatter') %>%
+        add_trace(y = ~proWest, name = 'production (West)', mode = 'lines+markers', color = 'springgreen', type = 'scatter') %>%
+        add_trace(y = ~conEast, name = 'consumption (East)', mode = 'lines+markers', color = 'orchid', type = 'scatter') %>%
+        add_trace(y = ~conWest, name = 'consumption (West)', mode = 'lines+markers', color = 'lightcoral', type = 'scatter')
     }
     
     if (input$worldAvg && input$perCapita) {
       p <- p %>%
-        add_trace(y = ~worldPro, name = 'world production', mode = 'lines+markers', type = 'scatter') %>%
-        add_trace(y = ~worldCon, name = 'world consumption', mode = 'lines+markers', type = 'scatter')
+        add_trace(y = ~worldPro, name = 'world production', mode = 'lines+markers', color = 'olivedrab', type = 'scatter') %>%
+        add_trace(y = ~worldCon, name = 'world consumption', mode = 'lines+markers', color = 'darkmagenta', type = 'scatter')
     } 
     p
   })
@@ -218,36 +241,34 @@ server <- function(input, output) {
   # Page 4 ----
   output$prediction <- renderPlotly({
     if (input$predProCons == "Production"){
-      data <- unname(unlist(production[production$country == paste(input$predCountry),-1]))
+      if(paste(input$predCountry) == "World"){
+        data <- world$`world pro`
+      }else {
+        data <- unname(unlist(production[production$country == paste(input$predCountry),-1]))
+      }
       M2 = auto.arima(ts(data, frequency = 10), D=1)
       fore = forecast(M2)
-      p <- plot_ly() %>%
-        add_lines(x = time(data), y = data,
-                  color = I("black"), name = "observed") %>%
-        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 2], ymax = fore$upper[, 2],
-                    color = I("gray95"), name = "95% confidence") %>%
-        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 1], ymax = fore$upper[, 1],
-                    color = I("gray80"), name = "80% confidence") %>%
-        add_lines(x = time(fore$mean)*8, y = fore$mean, color = I("blue"), name = "prediction")
-      p
     }else {
-      data <- unname(unlist(consumption[consumption$country == paste(input$predCountry),-1]))
+      if(paste(input$predCountry) == "World"){
+        data <- world$`world pro`
+      }else {
+        data <- unname(unlist(consumption[consumption$country == paste(input$predCountry),-1]))
+      }
       M2 = auto.arima(ts(data, frequency = 10), D=1)
       fore = forecast(M2)
-      p <- plot_ly() %>%
-        add_lines(x = time(data), y = data,
-                  color = I("black"), name = "observed") %>%
-        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 2], ymax = fore$upper[, 2],
-                    color = I("gray95"), name = "95% confidence") %>%
-        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 1], ymax = fore$upper[, 1],
-                    color = I("gray80"), name = "80% confidence") %>%
-        add_lines(x = time(fore$mean)*8, y = fore$mean, color = I("blue"), name = "prediction")
     }
-    p <- p %>%
+    
+    plot_ly() %>%
+      add_lines(x = time(data), y = data,
+                color = I("black"), name = "observed") %>%
+      add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 2], ymax = fore$upper[, 2],
+                  color = I("gray95"), name = "95% confidence") %>%
+      add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 1], ymax = fore$upper[, 1],
+                  color = I("gray80"), name = "80% confidence") %>%
+      add_lines(x = time(fore$mean)*8, y = fore$mean, color = I("blue"), name = "prediction") %>%
       layout(title = paste(input$predCountry),
              xaxis = list(title = "Year"),
              yaxis = list (title = "Primary Energy (Giga BTU)"))
-    p
   })
   
 }
