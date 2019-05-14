@@ -97,14 +97,6 @@ combined_consumption_table$Latitude <- as.numeric(combined_consumption_table$Lat
 combined_consumption_table$Longitude <- as.numeric(combined_consumption_table$Longitude)
 
 #Check what the maximum value is for production so we can set the range for the color scale for circles on the map
-mx = -1
-#for(i in 2:ncol(production)) {
-#  for (k in 1:228) {
-#    if (as.numeric(production[k,i]) > mx) {
-#      mx = as.numeric(production[k,i])
-#    }
-#  }
-#}
 mx <- max(production[,-1],na.rm=T) 
 cat("The maximum is", mx, "\n")
 
@@ -230,11 +222,13 @@ for (i in 2:38){
 
 # World Average
 world <- cbind(x = as.data.frame(colSums(cleanedPro[,-1], na.rm = TRUE)), # production
-               y = as.data.frame(colSums(cleanedCon[,-1], na.rm = TRUE))) # consumption
+               y = as.data.frame(colSums(cleanedCon[,-1], na.rm = TRUE)), # consumption
+               z = as.data.frame(colSums(cleanedPPP[,-1], na.rm = TRUE))) # ppp
 worldPop <- as.data.frame(colSums(cleanedPop[,-1], na.rm = TRUE))
 for (i in (1:37)){
   world[i,1] <- as.numeric(world[i,1]) / as.numeric(worldPop[i,1]) # world avg production
   world[i,2] <- as.numeric(world[i,2]) / as.numeric(worldPop[i,1]) # world avg consumption
+  world[i,3] <- as.numeric(world[i,3]) / as.numeric(worldPop[i,1]) # world avg ppp
 }
-names(world)<- c("world pro", "world con")
+names(world)<- c("world pro", "world con", "world ppp")
 
