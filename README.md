@@ -10,3 +10,5 @@ Stella Lee, Patrick Min, and Nate Lu
 * World PPP (Purchasing Power Parity) (1980 - 2016)
   * World Bank: https://data.worldbank.org/indicator/NY.GDP.MKTP.PP.CD
 
+## r Shiny application
+https://stellasylee.shinyapps.io/EnergyConsumptionProduction/
