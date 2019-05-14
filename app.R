@@ -1,3 +1,10 @@
+#We referred to the following webpages while working on this project:
+#https://medium.com/@joyplumeri/how-to-make-interactive-maps-in-r-shiny-brief-tutorial-c2e1ef0447da
+#https://rstudio.github.io/leaflet/popups.html
+#https://appsilon.com/how-to-use-viridis-colors-with-plotly-and-leaflet/
+#Some of the map code is copied pretty closely from these sites.
+#https://plot.ly/r/shiny-coupled-hover-events/
+
 library(shiny)
 library(plotly)
 library(dplyr)
@@ -23,7 +30,7 @@ source("source.R")
 ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and Production",
                   # First Page - Intro
                   tabPanel("Intro",
-                           fluidPage(h1("project title?"),
+                           fluidPage(h1("Primary Energy Consumption and Production"),
                                      br(),
                                      p("project description"),
                                      br(),
@@ -64,14 +71,14 @@ ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and 
                                          checkboxInput(inputId = "ppp", # per capita scale
                                                        label = "Show PPP (Purchasing Power Parity)",
                                                        value = FALSE),
+                                         checkboxInput(inputId = "log", 
+                                                       label = "Show log scale ", # log scale
+                                                       value = FALSE),
                                          checkboxInput(inputId = "perCapita", # per capita scale
                                                        label = "Show per capita scale",
                                                        value = FALSE),
                                          checkboxInput(inputId = "worldAvg", # world average line
                                                        label = "Show world production and consumption per capita ",
-                                                       value = FALSE),
-                                         checkboxInput(inputId = "log", 
-                                                       label = "Show log scale ", # log scale
                                                        value = FALSE)
                                        ),
                                        mainPanel(
@@ -91,7 +98,7 @@ ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and 
                                                      selected = "Afghanistan")
                                        ),
                                        mainPanel(
-                                         plotOutput(outputId = "prediction", height = "600px")
+                                         plotlyOutput(outputId = "prediction", height = "600px")
                                        )
                                      )))
 )
@@ -209,17 +216,38 @@ server <- function(input, output) {
   })
   
   # Page 4 ----
-  output$prediction <- renderPlot({
+  output$prediction <- renderPlotly({
     if (input$predProCons == "Production"){
-      data <- prod1.5[prod1.5$country == paste(input$predCountry), ]$value
+      data <- unname(unlist(production[production$country == paste(input$predCountry),-1]))
       M2 = auto.arima(ts(data, frequency = 10), D=1)
-      M2F = forecast(M2)
-      plot(M2F,main="ARIMA Forecast")
+      fore = forecast(M2)
+      p <- plot_ly() %>%
+        add_lines(x = time(data), y = data,
+                  color = I("black"), name = "observed") %>%
+        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 2], ymax = fore$upper[, 2],
+                    color = I("gray95"), name = "95% confidence") %>%
+        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 1], ymax = fore$upper[, 1],
+                    color = I("gray80"), name = "80% confidence") %>%
+        add_lines(x = time(fore$mean)*8, y = fore$mean, color = I("blue"), name = "prediction")
+      p
     }else {
-      
+      data <- unname(unlist(consumption[consumption$country == paste(input$predCountry),-1]))
+      M2 = auto.arima(ts(data, frequency = 10), D=1)
+      fore = forecast(M2)
+      p <- plot_ly() %>%
+        add_lines(x = time(data), y = data,
+                  color = I("black"), name = "observed") %>%
+        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 2], ymax = fore$upper[, 2],
+                    color = I("gray95"), name = "95% confidence") %>%
+        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 1], ymax = fore$upper[, 1],
+                    color = I("gray80"), name = "80% confidence") %>%
+        add_lines(x = time(fore$mean)*8, y = fore$mean, color = I("blue"), name = "prediction")
     }
-    
-   
+    p <- p %>%
+      layout(title = paste(input$predCountry),
+             xaxis = list(title = "Year"),
+             yaxis = list (title = "Primary Energy (Giga BTU)"))
+    p
   })
   
 }
