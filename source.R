@@ -49,8 +49,11 @@ string_of_nodes <- string_of_nodes[-1] #Get rid of labels
 drop_abbreviations <- str_sub(string_of_nodes, start = 4)
 drop_abbreviations <- drop_abbreviations[-227] #U.S. Minor Outlying Islands - doesn't have coordinates
 
-latitudes <- str_replace_all(drop_abbreviations, c(" .*$" = ""))
-longitudes <- str_replace_all(drop_abbreviations, c("^[^ ]* " = ""))
+#Add coordinates for West Germany and East Germany
+with_two_germanys <- c(drop_abbreviations, "50 10 Germany, West", "52 12 Germany, East")
+
+latitudes <- str_replace_all(with_two_germanys, c(" .*$" = ""))
+longitudes <- str_replace_all(with_two_germanys, c("^[^ ]* " = ""))
 country_names <- str_replace_all(longitudes, c("^[^ ]* " = ""))
 longitudes <- str_replace_all(longitudes, c(" .*$" = ""))
 coordinates <- data.frame(Country = country_names, Latitude = latitudes, Longitude = longitudes, stringsAsFactors = FALSE)
@@ -97,11 +100,19 @@ combined_consumption_table$Latitude <- as.numeric(combined_consumption_table$Lat
 combined_consumption_table$Longitude <- as.numeric(combined_consumption_table$Longitude)
 
 #Check what the maximum value is for production so we can set the range for the color scale for circles on the map
+mx = -1
+#for(i in 2:ncol(production)) {
+#  for (k in 1:228) {
+#    if (as.numeric(production[k,i]) > mx) {
+#      mx = as.numeric(production[k,i])
+#    }
+#  }
+#}
 mx <- max(production[,-1],na.rm=T) 
-cat("The maximum is", mx, "\n")
+#cat("The maximum is", mx, "\n")
 
 mx <- max(consumption[,-1],na.rm=T) 
-cat("The maximum is", mx, "\n")
+#cat("The maximum is", mx, "\n")
 
 #Tidying production table so we can add column for color range
 tidy_combined_production_table <- gather(data = combined_production_table, key = year, value = prod, 2:38)
@@ -169,6 +180,181 @@ for(i in 1:length(tidy_combined_consumption_table$circle_color)) {
   }
 }
 
+##### Adding per-capita functionality to map
+
+# Import population table
+pop_table <- read.csv("worldPopulation.csv", stringsAsFactors = FALSE)
+
+# Remove extra columns at the beginning
+pop_table[,1] <- NULL
+pop_table$Series.Code <- NULL
+pop_table$Country.Code <- NULL
+
+# Make column names consistent
+colnames(pop_table)[1] <- "country"
+colnames(pop_table)[2:38] <- c("1980", "1981", "1982", "1983", "1984", "1985", "1986", "1987", "1988", "1989", "1990", "1991", "1992", "1993", "1994", "1995", "1996", "1997", "1998", "1999", "2000", "2001", "2002", "2003", "2004", "2005", "2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016")
+
+# Create the production and consumption tables (which we will later join with population info)
+capita_production_table <- combined_production_table
+capita_consumption_table <- combined_consumption_table
+
+#First, have to filter out countries/territories which aren't in the population/consumption tables
+capita_production_table <- capita_production_table[-c(6, 46, 64, 69, 75, 76, 82, 120, 127, 134, 141, 147, 152, 162, 169, 166, 188, 192, 216),]
+capita_consumption_table <- capita_consumption_table[-c(6, 46, 64, 69, 75, 76, 82, 120, 127, 134, 141, 147, 152, 162, 169, 166, 188, 192, 216),]
+
+#Make country names in population table match country names in production/consumption tables
+pop_table$country[28] <- "Virgin Islands, British"
+pop_table$country[29] <- "Brunei"
+pop_table$country[136] <- "Burma (Myanmar)"
+pop_table$country[33] <- "Cape Verde"
+pop_table$country[45] <- "Congo (Kinshasa)"
+pop_table$country[46] <- "Congo (Brazzaville)"
+pop_table$country[48] <- "Cote dIvoire (IvoryCoast)"
+pop_table$country[87] <- "Hong Kong"
+pop_table$country[118] <- "Macau"
+pop_table$country[59] <- "Egypt"
+pop_table$country[162] <- "Russia"
+pop_table$country[92] <- "Iran"
+pop_table$country[104] <- "Korea, North"
+pop_table$country[105] <- "Korea, South"
+pop_table$country[108] <- "Kyrgyzstan"
+pop_table$country[109] <- "Laos"
+pop_table$country[174] <- "Slovakia"
+pop_table$country[190] <- "Syria" 
+pop_table$country[211] <- "Venezuela" 
+pop_table$country[194] <- "Timor-Leste (East Timor)"
+pop_table$country[215] <- "Yemen"
+pop_table$country[213] <- "Virgin Islands,  U.S."
+pop_table$country[185] <- "Saint Vincent/Grenadines" 
+pop_table$country[183] <- "Saint Lucia"
+pop_table$country[182] <- "Saint Kitts and Nevis"
+
+#We also have to remove countries/territories from the population table which aren't in the production/consumption tables, as well as the extra categories (218-269)
+pop_table <- pop_table[-c(5, 40, 51, 64, 95, 115, 125, 129, 131, 146, 151, 165, 184, 173, 179, 202, 214, 218:269),]
+
+#Tidy pop_table into long format
+pop_table <- gather(data = pop_table, key = Year, value = Population, 2:38)
+
+#Serbia is missing population data before 1990, but it's shown as ".." instead of "NA," so changing it to "NA" here
+for(i in 1980:1989) {
+  year_str <- toString(i)
+  
+  pop_table[((pop_table$Year == year_str) & (pop_table$country == "Serbia")),]$Population <- NA
+}
+#Same for Eritrea from 2012 through 2016
+for(i in 2012:2016) {
+  year_str <- toString(i)
+  
+  pop_table[((pop_table$Year == year_str) & (pop_table$country == "Eritrea")),]$Population <- NA
+}
+#Same for Kuwait from 1992 through 1994
+for(i in 1992:1994) {
+  year_str <- toString(i)
+  
+  pop_table[((pop_table$Year == year_str) & (pop_table$country == "Kuwait")),]$Population <- NA
+}
+
+#Tidy into long format and join to create per-capita production table
+capita_production_table <- gather(data = capita_production_table, key = Year, value = Production, 2:38)
+capita_production_table <- left_join(x = capita_production_table, y = pop_table, by = c("country", "Year"))
+
+#Tidy into long format and join to create per-capita consumption table
+capita_consumption_table <- gather(data = capita_consumption_table, key = Year, value = Consumption, 2:38)
+capita_consumption_table <- left_join(x = capita_consumption_table, y = pop_table, by = c("country", "Year"))
+
+
+
+#Create another column for production per capita and consumption per capita
+#First, be sure production/consumption and population columns are numeric
+capita_production_table$Production <- as.numeric(capita_production_table$Production)
+capita_production_table$Population <- as.numeric(capita_production_table$Population)
+
+capita_consumption_table$Consumption <- as.numeric(capita_consumption_table$Consumption)
+capita_consumption_table$Population <- as.numeric(capita_consumption_table$Population)
+
+#Use "mutate" to create the new column in both tables
+capita_production_table <- mutate(capita_production_table, ppc = capita_production_table$Production / capita_production_table$Population)
+
+capita_consumption_table <- mutate(capita_consumption_table, cpc = capita_consumption_table$Consumption / capita_consumption_table$Population)
+
+
+#Create the circle colors for the per-capita production and consumption
+
+prod_2016 <- dplyr::filter(capita_production_table, capita_production_table$Year == "2016")
+
+cons_2016 <- dplyr::filter(capita_consumption_table, capita_consumption_table$Year == "2016")
+
+#First, production
+
+capita_production_table$circle_color <- NA
+
+for(i in 1:length(capita_production_table$circle_color)) {
+  if(!is.na(capita_production_table$ppc[i]) && capita_production_table$ppc[i] < quantile(prod_2016$ppc, na.rm = TRUE, .125)) {
+    capita_production_table$circle_color[i] <- circle_colors[1]
+    
+  } else if(!is.na(capita_production_table$ppc[i]) && capita_production_table$ppc[i] < quantile(prod_2016$ppc, na.rm = TRUE, .25)) {
+    capita_production_table$circle_color[i] <- circle_colors[2]
+    
+  } else if(!is.na(capita_production_table$ppc[i]) && capita_production_table$ppc[i] < quantile(prod_2016$ppc, na.rm = TRUE, .375)) {
+    capita_production_table$circle_color[i] <- circle_colors[3]
+    
+  } else if(!is.na(capita_production_table$ppc[i]) && capita_production_table$ppc[i] < quantile(prod_2016$ppc, na.rm = TRUE, .5)) {
+    capita_production_table$circle_color[i] <- circle_colors[4]
+    
+  } else if(!is.na(capita_production_table$ppc[i]) && capita_production_table$ppc[i] < quantile(prod_2016$ppc, na.rm = TRUE, .625)) {
+    capita_production_table$circle_color[i] <- circle_colors[5]
+    
+  } else if(!is.na(capita_production_table$ppc[i]) && capita_production_table$ppc[i] < quantile(prod_2016$ppc, na.rm = TRUE, .75)) {
+    capita_production_table$circle_color[i] <- circle_colors[6]
+    
+  } else if(!is.na(capita_production_table$ppc[i]) && capita_production_table$ppc[i] < quantile(prod_2016$ppc, na.rm = TRUE, .875)) {
+    capita_production_table$circle_color[i] <- circle_colors[7]
+    
+  } else if(!is.na(capita_production_table$ppc[i])) {
+    capita_production_table$circle_color[i] <- circle_colors[8]
+    
+  } else {
+    capita_production_table$circle_color[i] <- NA
+  }
+}
+
+  #Consumption
+capita_consumption_table$circle_color <- NA
+
+for(i in 1:length(capita_consumption_table$circle_color)) {
+  if(!is.na(capita_consumption_table$cpc[i]) && capita_consumption_table$cpc[i] < quantile(cons_2016$cpc, na.rm = TRUE, .125)) {
+    capita_consumption_table$circle_color[i] <- circle_colors[1]
+    
+  } else if(!is.na(capita_consumption_table$cpc[i]) && capita_consumption_table$cpc[i] < quantile(cons_2016$cpc, na.rm = TRUE, .25)) {
+    capita_consumption_table$circle_color[i] <- circle_colors[2]
+    
+  } else if(!is.na(capita_consumption_table$cpc[i]) && capita_consumption_table$cpc[i] < quantile(cons_2016$cpc, na.rm = TRUE, .375)) {
+    capita_consumption_table$circle_color[i] <- circle_colors[3]
+    
+  } else if(!is.na(capita_consumption_table$cpc[i]) && capita_consumption_table$cpc[i] < quantile(cons_2016$cpc, na.rm = TRUE, .5)) {
+    capita_consumption_table$circle_color[i] <- circle_colors[4]
+    
+  } else if(!is.na(capita_consumption_table$cpc[i]) && capita_consumption_table$cpc[i] < quantile(cons_2016$cpc, na.rm = TRUE, .625)) {
+    capita_consumption_table$circle_color[i] <- circle_colors[5]
+    
+  } else if(!is.na(capita_consumption_table$cpc[i]) && capita_consumption_table$cpc[i] < quantile(cons_2016$cpc, na.rm = TRUE, .75)) {
+    capita_consumption_table$circle_color[i] <- circle_colors[6]
+    
+  } else if(!is.na(capita_consumption_table$cpc[i]) && capita_consumption_table$cpc[i] < quantile(cons_2016$cpc, na.rm = TRUE, .875)) {
+    capita_consumption_table$circle_color[i] <- circle_colors[7]
+    
+  } else if(!is.na(capita_consumption_table$cpc[i])) {
+    capita_consumption_table$circle_color[i] <- circle_colors[8]
+    
+  } else {
+    capita_consumption_table$circle_color[i] <- NA
+  }
+}
+
+
+
+
+
 # Page 3 ----
 # Population data from 1980 to 2016
 worldBank <- function (data){
@@ -222,13 +408,10 @@ for (i in 2:38){
 
 # World Average
 world <- cbind(x = as.data.frame(colSums(cleanedPro[,-1], na.rm = TRUE)), # production
-               y = as.data.frame(colSums(cleanedCon[,-1], na.rm = TRUE)), # consumption
-               z = as.data.frame(colSums(cleanedPPP[,-1], na.rm = TRUE))) # ppp
+               y = as.data.frame(colSums(cleanedCon[,-1], na.rm = TRUE))) # consumption
 worldPop <- as.data.frame(colSums(cleanedPop[,-1], na.rm = TRUE))
 for (i in (1:37)){
   world[i,1] <- as.numeric(world[i,1]) / as.numeric(worldPop[i,1]) # world avg production
   world[i,2] <- as.numeric(world[i,2]) / as.numeric(worldPop[i,1]) # world avg consumption
-  world[i,3] <- as.numeric(world[i,3]) / as.numeric(worldPop[i,1]) # world avg ppp
 }
-names(world)<- c("world pro", "world con", "world ppp")
-
+names(world)<- c("world pro", "world con")

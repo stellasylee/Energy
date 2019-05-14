@@ -1,4 +1,5 @@
 #We referred to the following webpages while working on this project:
+#Some of the map code is copied pretty closely from these sites.
 #https://medium.com/@joyplumeri/how-to-make-interactive-maps-in-r-shiny-brief-tutorial-c2e1ef0447da
 #https://rstudio.github.io/leaflet/popups.html
 #https://appsilon.com/how-to-use-viridis-colors-with-plotly-and-leaflet/
@@ -10,7 +11,12 @@
 #https://stackoverflow.com/questions/54283852/leaflet-colorquantile-breaks-are-not-unique
 #https://stackoverflow.com/questions/54913505/invalid-type-list-of-argument-in-r
 #https://stackoverflow.com/questions/34134310/sum-of-returned-list-error-invalid-type-list-of-argument
-#Some of the map code is copied pretty closely from these sites.
+#https://www.dummies.com/programming/r/how-to-add-observations-to-a-data-frame-in-r/
+#https://stackoverflow.com/questions/22475189/subset-by-multiple-conditions
+#http://rprogramming.net/subset-data-in-r/
+#https://support.rstudio.com/hc/en-us/community/posts/200986347-Could-not-find-function-
+#https://plot.ly/r/shiny-coupled-hover-events/
+#https://stackoverflow.com/questions/50883243/operator-is-invalid-for-atomic-vector-inside-function
 
 library(shiny)
 library(plotly)
@@ -19,13 +25,13 @@ library(readr)
 library(leaflet)
 library(rvest)
 library(stringr)
-library(readr)
 library(ggplot2)
 library(timeSeries)
 library(ggfortify)
 library(reshape2)
 library(forecast)
 library(viridis)
+library(tidyr)
 
 # Source helper functions -----
 source("source.R")
@@ -49,7 +55,7 @@ ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and 
                   # Second Page - Map
                   tabPanel("Map",
                            fluidPage(
-                             titlePanel("U.S. Energy Production and Consumption"),
+                             titlePanel("Energy Production and Consumption Map"),
                              sidebarLayout(
                                sidebarPanel(
                                  selectInput(inputId = "prod_or_cons",
@@ -60,9 +66,13 @@ ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and 
                                              choices = c("1980","1981","1982","1983","1984","1985","1986","1987","1988","1989",
                                                          "1990","1991","1992","1993","1994","1995","1996","1997","1998","1999",
                                                          "2000","2001","2002","2003","2004","2005","2006","2007","2008","2009",
-                                                         "2010","2011","2012","2013","2014","2015","2016"))
+                                                         "2010","2011","2012","2013","2014","2015","2016")),
+                                 radioButtons(inputId = "absolute_or_capita",
+                                              label = "Absolute or per capita?",
+                                              choices = c("Absolute", "Per capita"))
                                ),
                                mainPanel({
+                                 #Map would go here
                                  leafletOutput(outputId = "map")
                                })
                              ))),
@@ -100,7 +110,7 @@ ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and 
                                                      label = "Please choose an option:",
                                                      choices = c("Production", "Consumption")),
                                          selectInput(inputId = "predCountry", label = strong("Country:"),
-                                                     choices = c(unique(production$country), "World"),
+                                                     choices = unique(production$country),
                                                      selected = "Afghanistan")
                                        ),
                                        mainPanel(
@@ -116,46 +126,98 @@ ui <- navbarPage (inverse= FALSE, "International Primary Energy Consumption and 
 server <- function(input, output) {
   # Map ----
   output$map <- renderLeaflet({
-    if(input$prod_or_cons == "Production") {
-      #opacity
-      op <- ifelse(is.na(tidy_combined_production_table[tidy_combined_production_table$year == input$which_year,]), .1, 1)
-      production_label <- sprintf(
-        "<strong>%s</strong><br/>Production: %g BTUs",
-        (tidy_combined_production_table[tidy_combined_production_table$year == input$which_year,])$country, (tidy_combined_production_table[tidy_combined_production_table$year == input$which_year,])$prod
-      ) %>% lapply(htmltools::HTML)
-      leaflet(tidy_combined_production_table) %>% 
-        setView(lng = 0, lat = 0, zoom = 2) %>% 
-        addTiles() %>% 
-        addCircles(data = tidy_combined_production_table[tidy_combined_production_table$year == input$which_year,],
-                   lat = (tidy_combined_production_table[tidy_combined_production_table$year == input$which_year,])$Latitude, 
-                   lng = (tidy_combined_production_table[tidy_combined_production_table$year == input$which_year,])$Longitude, weight = 1, 
-                   radius = 100000, 
-                   color = (tidy_combined_production_table[tidy_combined_production_table$year == input$which_year,])$circle_color, 
-                   label = production_label, opacity = op) %>% 
-        addLegend(colors = circle_colors, 
-                  labels = c("Category 1 (least production)", "2", "3", "4", "5", "6", "7", "8 (greatest production)"), 
-                  values = (tidy_combined_production_table[tidy_combined_production_table$year == input$which_year,])$circle_color, opacity = 0.7, 
-                  title = "Production (in BTUs)", position = "bottomright")
-    } else if(input$prod_or_cons == "Consumption") {
-      #opacity
-      op <- ifelse(is.na(combined_consumption_table[,input$which_year]), .1, 1)
-      consumption_label <- sprintf(
-        "<strong>%s</strong><br/>Consumption: %g BTUs",
-        (tidy_combined_consumption_table[tidy_combined_consumption_table$year == input$which_year,])$country, (tidy_combined_consumption_table[tidy_combined_consumption_table$year == input$which_year,])$cons
-      ) %>% lapply(htmltools::HTML)
-      leaflet(tidy_combined_consumption_table) %>%
-        setView(lng = 0, lat = 0, zoom = 2) %>%
-        addTiles() %>%
-        addCircles(data = tidy_combined_consumption_table[tidy_combined_consumption_table$year == input$which_year,],
-                   lat = (tidy_combined_consumption_table[tidy_combined_consumption_table$year == input$which_year,])$Latitude,
-                   lng = (tidy_combined_consumption_table[tidy_combined_consumption_table$year == input$which_year,])$Longitude,
-                   weight = 1, radius = 100000,
-                   color = (tidy_combined_consumption_table[tidy_combined_consumption_table$year == input$which_year,])$circle_color,
-                   label = consumption_label, opacity = op) %>% 
-        addLegend(colors = circle_colors, 
-                  labels = c("Category 1 (least consumption)", "2", "3", "4", "5", "6", "7", "8 (greatest consumption)"), 
-                  values = (tidy_combined_consumption_table[tidy_combined_consumption_table$year == input$which_year,])$circle_color, 
-                  opacity = 0.7, title = "Consumption (in BTUs)", position = "bottomright")
+    if(input$absolute_or_capita == "Absolute") {
+      if(input$prod_or_cons == "Production") {
+        
+        if(input$which_year < 1991) {
+          filtered_table <- dplyr::filter(tidy_combined_production_table, tidy_combined_production_table$country != "Germany")
+        } else if(input$which_year >= 1991) {
+          filtered_table <- dplyr::filter(tidy_combined_production_table, tidy_combined_production_table$country != "Germany, West", tidy_combined_production_table$country != "Germany, East")
+        }
+        
+        #opacity
+        op <- ifelse(is.na(filtered_table[filtered_table$year == input$which_year,]$prod), .1, 1)
+        
+        production_label <- sprintf(
+          "<strong>%s</strong><br/>Production: %g BTUs",
+          (filtered_table[filtered_table$year == input$which_year,])$country, (filtered_table[filtered_table$year == input$which_year,])$prod
+        ) %>% lapply(htmltools::HTML)
+        leaflet(filtered_table) %>% 
+          setView(lng = 0, lat = 0, zoom = 2) %>% 
+          addTiles() %>% 
+          addCircles(data = filtered_table[filtered_table$year == input$which_year,],
+                     lat = (filtered_table[filtered_table$year == input$which_year,])$Latitude, 
+                     lng = (filtered_table[filtered_table$year == input$which_year,])$Longitude,
+                     weight = 1, 
+                     radius = 100000, 
+                     color = (filtered_table[filtered_table$year == input$which_year,])$circle_color, 
+                     label = production_label,
+                     opacity = op
+                     ) %>% 
+          addLegend(colors = circle_colors, 
+                    labels = c("Category 1 (least production)", "2", "3", "4", "5", "6", "7", "8 (greatest production)"), 
+                    values = (filtered_table[filtered_table$year == input$which_year,])$circle_color, opacity = 0.7, 
+                    title = "Production (in BTUs)", position = "bottomright")
+      } else if(input$prod_or_cons == "Consumption") {
+        
+        if(input$which_year < 1991) {
+          filtered_table <- dplyr::filter(tidy_combined_consumption_table, tidy_combined_consumption_table$country != "Germany")
+        } else if(input$which_year >= 1991) {
+          filtered_table <- dplyr::filter(tidy_combined_consumption_table, tidy_combined_consumption_table$country != "Germany, West", tidy_combined_consumption_table$country != "Germany, East")
+        }
+        
+        #opacity
+        op <- ifelse(is.na(filtered_table[filtered_table$year == input$which_year,]$cons), .1, 1)
+        
+        consumption_label <- sprintf(
+          "<strong>%s</strong><br/>Consumption: %g BTUs",
+          (filtered_table[filtered_table$year == input$which_year,])$country, (filtered_table[filtered_table$year == input$which_year,])$cons
+        ) %>% lapply(htmltools::HTML)
+        leaflet(filtered_table) %>%
+          setView(lng = 0, lat = 0, zoom = 2) %>%
+          addTiles() %>%
+          addCircles(data = filtered_table[filtered_table$year == input$which_year,],
+                     lat = (filtered_table[filtered_table$year == input$which_year,])$Latitude,
+                     lng = (filtered_table[filtered_table$year == input$which_year,])$Longitude,
+                     weight = 1,
+                     radius = 100000,
+                     color = (filtered_table[filtered_table$year == input$which_year,])$circle_color,
+                     label = consumption_label,
+                     opacity = op
+                     ) %>% 
+          addLegend(colors = circle_colors, 
+                    labels = c("Category 1 (least consumption)", "2", "3", "4", "5", "6", "7", "8 (greatest consumption)"), 
+                    values = (filtered_table[filtered_table$year == input$which_year,])$circle_color, 
+                    opacity = 0.7, title = "Consumption (in BTUs)", position = "bottomright")
+      }
+    
+    } else if(input$absolute_or_capita == "Per capita") {
+      if(input$prod_or_cons == "Production") {
+        
+        #opacity
+        op <- ifelse(is.na((capita_production_table[capita_production_table$Year == input$which_year,])$Production || is.na(capita_production_table[capita_production_table$Year == input$which_year,])$Population), .1, 1)
+        
+        production_capita_label <- sprintf(
+          "<strong>%s</strong><br/>Production per capita: %g BTUs/person",
+          (capita_production_table[capita_production_table$Year == input$which_year,])$country, (capita_production_table[capita_production_table$Year == input$which_year,])$ppc
+        ) %>% lapply(htmltools::HTML)
+        
+        leaflet(capita_production_table) %>% setView(lng = 0, lat = 0, zoom = 2) %>% addTiles() %>% addCircles(data = capita_production_table[capita_production_table$Year == input$which_year,], lat = (capita_production_table[capita_production_table$Year == input$which_year,])$Latitude, lng = (capita_production_table[capita_production_table$Year == input$which_year,])$Longitude, weight = 1, radius = 100000, color = (capita_production_table[capita_production_table$Year == input$which_year,])$circle_color, label = production_capita_label, opacity = op) %>% addLegend(colors = circle_colors, labels = c("Category 1 (least production/capita)", "2", "3", "4", "5", "6", "7", "8 (greatest production/capita)"), values = (capita_production_table[capita_production_table$Year == input$which_year,])$circle_color, opacity = 0.7, title = "Production per capita (in BTUs/person)", position = "bottomright")
+        
+        
+      } else if(input$prod_or_cons == "Consumption") {
+        
+        #opacity
+        op <- ifelse(is.na((capita_consumption_table[capita_consumption_table$Year == input$which_year,])$Consumption || is.na(capita_consumption_table[capita_consumption_table$Year == input$which_year,])$Population), .1, 1)
+        
+        consumption_capita_label <- sprintf(
+          "<strong>%s</strong><br/>Consumption per capita: %g BTUs/person",
+          (capita_consumption_table[capita_consumption_table$Year == input$which_year,])$country, (capita_consumption_table[capita_consumption_table$Year == input$which_year,])$cpc
+        ) %>% lapply(htmltools::HTML)
+        
+        leaflet(capita_consumption_table) %>% setView(lng = 0, lat = 0, zoom = 2) %>% addTiles() %>% addCircles(data = capita_consumption_table[capita_consumption_table$Year == input$which_year,], lat = (capita_consumption_table[capita_consumption_table$Year == input$which_year,])$Latitude, lng = (capita_consumption_table[capita_consumption_table$Year == input$which_year,])$Longitude, weight = 1, radius = 100000, color = (capita_consumption_table[capita_consumption_table$Year == input$which_year,])$circle_color, label = consumption_capita_label, opacity = op) %>% addLegend(colors = circle_colors, labels = c("Category 1 (least consumption/capita)", "2", "3", "4", "5", "6", "7", "8 (greatest consumption/capita)"), values = (capita_consumption_table[capita_consumption_table$Year == input$which_year,])$circle_color, opacity = 0.7, title = "Consumption per capita (in BTUs/person)", position = "bottomright")
+        
+      }
     }
   })
   
@@ -163,8 +225,7 @@ server <- function(input, output) {
   output$timeseries <- renderPlotly({
     # Special Case: Germany reunification at 1990
     if (paste(input$country) == "Germany"){
-      temp <- cbind (as.data.frame(t(cleanedPop [which(cleanedPop$country == "Germany"),-1])),
-                     as.data.frame(t(cleanedPPP [which(cleanedPPP$country == "Germany"),-1])),
+      temp <- cbind (as.data.frame(t(cleanedPop [which(cleanedCon$country == "Germany"),-1])),
                      as.data.frame(t(production [which(production$country == "Germany, East"), -1])),
                      as.data.frame(t(production [which(production$country == "Germany, West"), -1])),
                      as.data.frame(t(cleanedPro [which(cleanedPro$country == "Germany"),-1])), 
@@ -172,22 +233,20 @@ server <- function(input, output) {
                      as.data.frame(t(consumption [which(consumption$country == "Germany, West"), -1])),
                      as.data.frame(t(cleanedCon [which(cleanedCon$country == "Germany"),-1])),
                      world)
-      names(temp) <- c("population", "ppp", "proEast", "proWest", "production",
-                       "conEast", "conWest", "consumption",  "worldPro", "worldCon", "worldPPP")
+      names(temp) <- c("population", "proEast", "proWest", "production",
+                       "conEast", "conWest", "consumption",  "worldPro", "worldCon")
     } else {
       # Create data frame for plot
       temp <- cbind(as.data.frame(t(cleanedPop [which(cleanedPop$country == paste(input$country)),-1])),
-                    as.data.frame(t(cleanedPPP [which(cleanedPPP$country == paste(input$country)),-1])),
                     as.data.frame(t(cleanedPro [which(cleanedPro$country == paste(input$country)),-1])),
                     as.data.frame(t(cleanedCon [which(cleanedCon$country == paste(input$country)),-1])),
                     world)
-      names(temp) <- c("population", "ppp", "production", "consumption", "worldPro", "worldCon", "worldPPP")
+      names(temp) <- c("population", "production", "consumption", "worldPro", "worldCon")
     }
     
     # per capita data
     temp <- mutate(temp, proPerCapita = production / population) %>%
-      mutate(., conPerCapita = consumption / population) %>%
-      mutate(., pppPerCapita = ppp / population)
+      mutate(., conPerCapita = consumption / population)
     
     if (input$log){
       temp <- log (temp[,-1])
@@ -198,42 +257,28 @@ server <- function(input, output) {
              xaxis = list(title = "Year"),
              yaxis = list (title = "Primary Energy (Giga BTU)"))
     
-    
-    if ((input$ppp) && (input$perCapita)){
-      p <- p %>%
-        add_trace(y = ~pppPerCapita, name = 'purchasing power', mode = 'lines+markers', color = '#0000ff', type = 'scatter')
-      if (input$worldAvg){
-        p <- p %>%
-          add_trace(y = ~worldPPP, name = 'world avg purchasing power', mode = 'lines+markers', color = '#000080', type = 'scatter') 
-      }
-    } else if (input$ppp){
-      p <- p %>%
-        add_trace(y = ~ppp, name = 'purchasing power', mode = 'lines+markers', color = 'blue', type = 'scatter')
-    }
-    
-    
     if (input$perCapita){
       p <- p %>%
-        add_trace(y = ~proPerCapita, name = 'production', mode = 'lines+markers', color = 'green', type = 'scatter') %>%
-        add_trace(y = ~conPerCapita, name = 'consumption', mode = 'lines+markers', color = 'darkorchid', type = 'scatter')
+        add_trace(y = ~proPerCapita, name = 'production', mode = 'lines+markers', type = 'scatter') %>%
+        add_trace(y = ~conPerCapita, name = 'consumption', mode = 'lines+markers', type = 'scatter')
     } else{
       p <- p %>%
-        add_trace(y = ~production, name = 'production', mode = 'lines+markers', color = 'green', type = 'scatter') %>%
-        add_trace(y = ~consumption, name = 'consumption', mode = 'lines+markers', color = 'darkorchid', type = 'scatter')
+        add_trace(y = ~production, name = 'production', mode = 'lines+markers', type = 'scatter') %>%
+        add_trace(y = ~consumption, name = 'consumption', mode = 'lines+markers', type = 'scatter')
     }
     
     if ((paste(input$country) == "Germany") && (!input$perCapita)){
       p <- p %>%
-        add_trace(y = ~proEast, name = 'production (East)', mode = 'lines+markers', color = 'yellowgreen', type = 'scatter') %>%
-        add_trace(y = ~proWest, name = 'production (West)', mode = 'lines+markers', color = 'springgreen', type = 'scatter') %>%
-        add_trace(y = ~conEast, name = 'consumption (East)', mode = 'lines+markers', color = 'orchid', type = 'scatter') %>%
-        add_trace(y = ~conWest, name = 'consumption (West)', mode = 'lines+markers', color = 'lightcoral', type = 'scatter')
+        add_trace(y = ~proEast, name = 'production (East)', mode = 'lines+markers', type = 'scatter') %>%
+        add_trace(y = ~proWest, name = 'production (West)', mode = 'lines+markers', type = 'scatter') %>%
+        add_trace(y = ~conEast, name = 'consumption (East)', mode = 'lines+markers', type = 'scatter') %>%
+        add_trace(y = ~conWest, name = 'consumption (West)', mode = 'lines+markers', type = 'scatter')
     }
     
     if (input$worldAvg && input$perCapita) {
       p <- p %>%
-        add_trace(y = ~worldPro, name = 'world production', mode = 'lines+markers', color = 'olivedrab', type = 'scatter') %>%
-        add_trace(y = ~worldCon, name = 'world consumption', mode = 'lines+markers', color = 'darkmagenta', type = 'scatter')
+        add_trace(y = ~worldPro, name = 'world production', mode = 'lines+markers', type = 'scatter') %>%
+        add_trace(y = ~worldCon, name = 'world consumption', mode = 'lines+markers', type = 'scatter')
     } 
     p
   })
@@ -241,34 +286,36 @@ server <- function(input, output) {
   # Page 4 ----
   output$prediction <- renderPlotly({
     if (input$predProCons == "Production"){
-      if(paste(input$predCountry) == "World"){
-        data <- world$`world pro`
-      }else {
-        data <- unname(unlist(production[production$country == paste(input$predCountry),-1]))
-      }
+      data <- unname(unlist(production[production$country == paste(input$predCountry),-1]))
       M2 = auto.arima(ts(data, frequency = 10), D=1)
       fore = forecast(M2)
+      p <- plot_ly() %>%
+        add_lines(x = time(data), y = data,
+                  color = I("black"), name = "observed") %>%
+        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 2], ymax = fore$upper[, 2],
+                    color = I("gray95"), name = "95% confidence") %>%
+        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 1], ymax = fore$upper[, 1],
+                    color = I("gray80"), name = "80% confidence") %>%
+        add_lines(x = time(fore$mean)*8, y = fore$mean, color = I("blue"), name = "prediction")
+      p
     }else {
-      if(paste(input$predCountry) == "World"){
-        data <- world$`world pro`
-      }else {
-        data <- unname(unlist(consumption[consumption$country == paste(input$predCountry),-1]))
-      }
+      data <- unname(unlist(consumption[consumption$country == paste(input$predCountry),-1]))
       M2 = auto.arima(ts(data, frequency = 10), D=1)
       fore = forecast(M2)
+      p <- plot_ly() %>%
+        add_lines(x = time(data), y = data,
+                  color = I("black"), name = "observed") %>%
+        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 2], ymax = fore$upper[, 2],
+                    color = I("gray95"), name = "95% confidence") %>%
+        add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 1], ymax = fore$upper[, 1],
+                    color = I("gray80"), name = "80% confidence") %>%
+        add_lines(x = time(fore$mean)*8, y = fore$mean, color = I("blue"), name = "prediction")
     }
-    
-    plot_ly() %>%
-      add_lines(x = time(data), y = data,
-                color = I("black"), name = "observed") %>%
-      add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 2], ymax = fore$upper[, 2],
-                  color = I("gray95"), name = "95% confidence") %>%
-      add_ribbons(x = time(fore$mean)*8, ymin = fore$lower[, 1], ymax = fore$upper[, 1],
-                  color = I("gray80"), name = "80% confidence") %>%
-      add_lines(x = time(fore$mean)*8, y = fore$mean, color = I("blue"), name = "prediction") %>%
+    p <- p %>%
       layout(title = paste(input$predCountry),
              xaxis = list(title = "Year"),
              yaxis = list (title = "Primary Energy (Giga BTU)"))
+    p
   })
   
 }
