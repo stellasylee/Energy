@@ -210,6 +210,7 @@ population <- read.csv("https://raw.githubusercontent.com/stellasylee/Energy/mas
 ppp <- read.csv("https://raw.githubusercontent.com/stellasylee/Energy/master/worldPPP.csv") %>%
   worldBank(.)
 ppp[ppp == "" | ppp == ".."] <- NA
+
 # Join the data (intersection)
 # Combine Germany East, West to Germany
 for (i in (1980:1990)){
@@ -237,7 +238,3 @@ for (i in (1:37)){
 }
 names(world)<- c("world pro", "world con")
 
-# Page 4 ----
-prod1.5 <- melt(production, id = "country")
-names(prod1.5)[names(prod1.5) == "variable"] <- "year"
-cons
