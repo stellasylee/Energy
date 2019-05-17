@@ -397,10 +397,22 @@ for (i in (1980:1990)){
 }
 production$country <- as.character(production$country)
 consumption$country <- as.character(consumption$country)
-cleanedPro <- dplyr::filter(production, !(production$country %in% anti_join(x = production, y = population, by = "country")$country))
-cleanedCon <- dplyr::filter(consumption, !(consumption$country %in% anti_join(x = consumption, y = population, by = "country")$country))
-cleanedPop <- dplyr::filter(population, !(population$country %in% anti_join(x = population, y = production, by = "country")$country))
-cleanedPPP <- dplyr::filter(ppp, !(ppp$country %in% anti_join(x = ppp, y = production, by = "country")$country))
+
+# This function is for sorting the countries by alphabetically and set the row name consistent for further cleaning process
+sortByCountry <- function (data){
+  data <- data[order(data$country),]
+  row.names(data) <- c(1:191)
+  data
+} 
+
+cleanedPro <- dplyr::filter(production, !(production$country %in% anti_join(x = production, y = population, by = "country")$country)) %>%
+  sortByCountry (.)
+cleanedCon <- dplyr::filter(consumption, !(consumption$country %in% anti_join(x = consumption, y = population, by = "country")$country))%>%
+  sortByCountry (.)
+cleanedPop <- dplyr::filter(population, !(population$country %in% anti_join(x = population, y = production, by = "country")$country))%>%
+  sortByCountry (.)
+cleanedPPP <- dplyr::filter(ppp, !(ppp$country %in% anti_join(x = ppp, y = production, by = "country")$country)) %>%
+  sortByCountry (.)
 for (i in 2:38){
   cleanedPop[,i] <- parse_number(as.character(cleanedPop[,i]))
   cleanedPPP[,i] <- parse_number(as.character(cleanedPPP[,i]))
